@@ -1,3 +1,13 @@
+# Indicaciones
+
+Sólo alcancé a hacer una medio tabla que pinta el nombre, el apellido, el número de licencia profesional, la especialidad y el campo de disponibilidad horaria que no alcancé a terminar.
+
+Creé el servicio de especialistas para conectar por medio de fetch con el controldor.
+
+Creé el servicio de especialidades porque en el formulario pensaba colocar un select para gestionar las creaciones y actalizaciones.
+
+Se clona el repositorio y se instalan las dependencias con NPM INSTALL
+
 # front_practical_test
 
 This template should help get you started developing with Vue 3 in Vite.
