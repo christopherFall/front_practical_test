@@ -1,103 +1,149 @@
 <template>
-  <div class="pa-4">
-    <!-- Tabla paginada con búsqueda -->
-<v-data-table-server
-  v-model:items-per-page="itemsPerPage"
-  :headers="headers"
-  :items="serverItems"
-  :items-length="totalItems"
-  :loading="loading"
-  item-value="id"
-  @update:options="loadItems"
->
+  <v-card class="pa-4 elevation-2 rounded-xl">
+    <v-card-title class="text-h6 font-weight-bold">
+      Lista de Especialistas
+    </v-card-title>
 
-  <template #item.firstName="{ item }">
-    {{ item.firstName }}
-  </template>
-
-  <template #item.lastName="{ item }">
-    {{ item.lastName }}
-  </template>
-
-  <template #item.professionalLicenseNumber="{ item }">
-    {{ item.professionalLicenseNumber }}
-  </template>
-
-  <template #item.specialty="{ item }">
-    {{ item.specialty?.name || '-' }}
-  </template>
-
-  <!-- Mostrar horarios agrupados por día -->
-  <template #item.schedule="{ item }">
-    <div v-if="item.availabilities">
-      <div v-for="(group, day) in groupByDay(item.availabilities)" :key="day">
-        <strong>{{ day }}:</strong>
-        {{ group.map(a => `${a.start_time} - ${a.end_time}`).join(', ') }}
-      </div>
-    </div>
-  </template>
-</v-data-table-server>
-
-
+    <!-- Búsqueda Global -->
     <v-text-field
       v-model="search"
-      class="ma-2"
+      class="ma-4"
       density="compact"
-      placeholder="Buscar por nombre o cédula profesional"
+      variant="outlined"
+      placeholder="Buscar por nombre o licencia profesional"
+      prepend-inner-icon="mdi-magnify"
       hide-details
-      color="purple"
+      color="primary"
     />
-  </div>
+
+    <!-- Tabla -->
+    <v-data-table
+      v-model:sort-by="sortBy"
+      :headers="headers"
+      :items="filteredItems"
+      class="elevation-1 rounded-lg"
+      hover
+    >
+      <!-- Filtros por columna -->
+      <template #top>
+        <v-row class="px-4 pb-2">
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model="filters.firstName"
+              label="Filtrar por nombre"
+              clearable
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model="filters.lastName"
+              label="Filtrar por apellido"
+              clearable
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model="filters.professionalLicenseNumber"
+              label="Filtrar por licencia"
+              clearable
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model="filters.specialty"
+              label="Filtrar por especialidad"
+              clearable
+              density="compact"
+            />
+          </v-col>
+        </v-row>
+      </template>
+
+      <!-- Horario agrupado -->
+      <template #item.schedule="{ item }">
+        <div v-if="item.availabilities">
+          <div
+            v-for="(group, day) in groupByDay(item.availabilities)"
+            :key="day"
+          >
+            <strong>{{ day }}:</strong>
+            {{ group.map(a => `${a.startTime} - ${a.endTime}`).join(', ') }}
+          </div>
+        </div>
+      </template>
+      <template #item.state="{ item }">
+        <v-chip
+          :color="item.state ? 'green' : 'red'"
+          text-color="white"
+          small
+          class="font-weight-bold"
+          >
+          {{ item.state ? 'Activo' : 'Inactivo' }}
+        </v-chip>
+      </template>
+    </v-data-table>
+  </v-card>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import SpecialistService from '@/services/SpecialistService'
 
-const itemsPerPage = ref(5)
-const serverItems = ref([])
-const totalItems = ref(0)
-const loading = ref(false)
+// Estados
+const sortBy = ref([{ key: 'firstName', order: 'asc' }])
+const serverItems = ref<any[]>([])
 const search = ref('')
-const lastOptions = ref({ page: 1, itemsPerPage: 5, sortBy: [] })
-
+const filters = ref({
+  firstName: '',
+  lastName: '',
+  professionalLicenseNumber: '',
+  specialty: '',
+})
 const headers = [
   { title: 'Nombre', key: 'firstName', sortable: true },
   { title: 'Apellido', key: 'lastName', sortable: true },
   { title: 'Licencia Profesional', key: 'professionalLicenseNumber', sortable: true },
-  { title: 'Especialidad', key: 'specialty', sortable: true },
+  { title: 'Especialidad', key: 'specialty.name', sortable: true },
   { title: 'Horario', key: 'schedule', sortable: false },
+  { title: 'Estado', key: 'state', sortable: true },
 ]
 
-async function loadItems(options: any) {
-  loading.value = true
-  lastOptions.value = options
+// Carga inicial
+loadItems()
+async function loadItems() {
   try {
-    const { data, total } = await SpecialistService.getAll({
-      page: options.page,
-      limit: options.itemsPerPage,
-      search: search.value
-    })
+    const { data } = await SpecialistService.getAll()
     serverItems.value = data
-    totalItems.value = total
   } catch (error) {
     console.error('Error al cargar especialistas:', error)
-  } finally {
-    loading.value = false
   }
 }
 
-watch(search, () => {
-  loadItems({ ...lastOptions.value, page: 1 })
-})
-</script>
+// Filtro global + columnas
+const filteredItems = computed(() => {
+  return serverItems.value.filter((item) => {
+    const fullText = `${item.firstName} ${item.lastName} ${item.professionalLicenseNumber}`.toLowerCase()
+    const matchesSearch = fullText.includes(search.value.toLowerCase())
 
-<script lang="ts">
-export function groupByDay(availabilities: any[] = []) {
-  return availabilities.reduce((acc: Record<string, any[]>, item) => {
-    if (!acc[item.day]) acc[item.day] = []
-    acc[item.day].push(item)
-    return acc
+    const matchColumns =
+      (!filters.value.firstName || item.firstName.toLowerCase().includes(filters.value.firstName.toLowerCase())) &&
+      (!filters.value.lastName || item.lastName.toLowerCase().includes(filters.value.lastName.toLowerCase())) &&
+      (!filters.value.professionalLicenseNumber || item.professionalLicenseNumber.toLowerCase().includes(filters.value.professionalLicenseNumber.toLowerCase())) &&
+      (!filters.value.specialty || item.specialty?.name?.toLowerCase().includes(filters.value.specialty.toLowerCase()))
+
+    return matchesSearch && matchColumns
+  })
+})
+
+// Agrupar horarios
+function groupByDay(availabilities: any[] = []) {
+  return availabilities.reduce((grouped: Record<string, any[]>, current) => {
+    if (!grouped[current.day]) grouped[current.day] = []
+    grouped[current.day].push(current)
+    return grouped
   }, {})
 }
 </script>
